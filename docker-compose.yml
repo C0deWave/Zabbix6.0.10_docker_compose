@@ -1,0 +1,78 @@
+services:
+  mysql-server:
+    image: mysql:8.0.31
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_DATABASE=zabbix
+      - MYSQL_USER=zabbix
+      - MYSQL_PASSWORD="[CHANGEYOURPASSWORD_1]"
+      - MYSQL_ROOT_PASSWORD="[CHANGEYOURPASSWORD_1]"
+    volumes:
+      - mysql-volume:/var/lib/mysql
+    command:
+      - --character-set-server=utf8
+      - --collation-server=utf8_bin
+      - --default-authentication-plugin=mysql_native_password
+
+  zabbix-java-gateway:
+    restart: unless-stopped
+    image: zabbix/zabbix-java-gateway:centos-6.0.10
+    depends_on:
+      - mysql-server
+
+  zabbix-server-mysql:
+    restart: unless-stopped
+    image: zabbix/zabbix-server-mysql:6.0.10-centos
+    ports:
+      - "10051:10051"
+    environment:
+      - DB_SERVER_HOST=mysql-server
+      - MYSQL_DATABASE=zabbix
+      - MYSQL_USER=zabbix
+      - MYSQL_PASSWORD="[CHANGEYOURPASSWORD_1]"
+      - MYSQL_ROOT_PASSWORD="[CHANGEYOURPASSWORD_1]"
+      - ZBX_JAVAGATEWAY=zabbix-java-gateway
+    volumes:
+      - zabbix-modules-volume:/var/lib/zabbix/modules
+      - zabbix-snmptraps-volume:/var/lib/zabbix/snmptraps
+      - zabbix-export-volume:/var/lib/zabbix/export
+    links:
+      - mysql-server:mysql
+      - zabbix-java-gateway:zabbix-java-gateway
+    depends_on:
+      - zabbix-java-gateway
+
+  zabbix-web-nginx-mysql:
+    restart: unless-stopped
+    image: zabbix/zabbix-web-nginx-mysql:6.0.10-centos
+    environment:
+      - DB_SERVER_HOST=mysql-server
+      - MYSQL_DATABASE=zabbix
+      - MYSQL_USER=zabbix
+      - MYSQL_PASSWORD="[CHANGEYOURPASSWORD_1]"
+      - MYSQL_ROOT_PASSWORD="[CHANGEYOURPASSWORD_1]"
+      - ZBX_SERVER_HOST=zabbix-server-mysql
+    links:
+      - mysql-server:mysql
+      - zabbix-server-mysql:zabbix-server
+    ports:
+      - 80:8080
+    depends_on:
+      - zabbix-server-mysql
+
+  zabbix-agent:
+    image: zabbix/zabbix-agent:6.0.10-alpine
+    environment:
+      - "ZBX_SERVER_HOST=zabbix-server"
+      - "ZBX_HOSTNAME=Zabbix server"
+    links:
+      - zabbix-server-mysql:zabbix-server
+      - mysql-server:mysql
+
+
+volumes:
+  mysql-volume:
+  zabbix-modules-volume:
+  zabbix-snmptraps-volume:
+  zabbix-export-volume:
